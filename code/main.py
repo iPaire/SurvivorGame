@@ -36,7 +36,7 @@ class Game:
         self.enemy_sprites = pygame.sprite.Group() 
 
         # Progresie
-        self.score = 480
+        self.score = 0
         self.level = 0
          # arma
         self.can_shoot = True
