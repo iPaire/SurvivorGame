@@ -32,7 +32,7 @@ class gun(pygame.sprite.Sprite):
     def get_direction(self):
         mouse_pos = pygame.Vector2(pygame.mouse.get_pos())
         player_pos = pygame.Vector2(WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2)
-        self.player_direction = (mouse_pos - player_pos).normalize()
+        if (mouse_pos - player_pos):self.player_direction = (mouse_pos - player_pos).normalize()
         return self.player_direction
 
     def rotate_gun(self):
@@ -67,6 +67,7 @@ class Bullet(pygame.sprite.Sprite):
             self.kill()
 
 class Enemy(pygame.sprite.Sprite):
+
     def __init__(self,pos,frames,groups,player,collision_sprites):
         super().__init__(groups)
         self.player = player
@@ -87,6 +88,9 @@ class Enemy(pygame.sprite.Sprite):
         self.death_time = 0
         self.death_duration = 400
 
+        # Flags
+        self.alive = True
+
     def animate(self,dt):
         self.frame_index += self.animation_speed * dt
         self.image = self.frames[int(self.frame_index)% len(self.frames)]
@@ -106,16 +110,39 @@ class Enemy(pygame.sprite.Sprite):
         self.rect.center = self.hitbox_rect.center
 
     def collision(self, direction):
+        # Verifică toate sprite-urile cu care se intersectează hitbox-ul
+        colliders = []
         for sprite in self.collision_sprites:
             if sprite.rect.colliderect(self.hitbox_rect):
-                if direction == 'horizontal':
-                    if self.direction.x > 0: self.hitbox_rect.right = sprite.rect.left
-                    if self.direction.x < 0: self.hitbox_rect.left = sprite.rect.right
-                elif direction == 'vertical':
-                    if self.direction.y < 0: self.hitbox_rect.top = sprite.rect.bottom
-                    if self.direction.y > 0: self.hitbox_rect.bottom = sprite.rect.top
+                colliders.append(sprite)
+        
+        if not colliders:
+            return
+        
+        # Gestionare coliziuni orizontale
+        if direction == 'horizontal':
+            if self.direction.x > 0:  # Mișcare spre dreapta
+                # Găsește cel mai din stânga sprite
+                closest_sprite = min(colliders, key=lambda s: s.rect.left)
+                self.hitbox_rect.right = closest_sprite.rect.left
+            elif self.direction.x < 0:  # Mișcare spre stânga
+                # Găsește cel mai din dreapta sprite
+                closest_sprite = max(colliders, key=lambda s: s.rect.right)
+                self.hitbox_rect.left = closest_sprite.rect.right
+        
+        # Gestionare coliziuni verticale
+        elif direction == 'vertical':
+            if self.direction.y > 0:  # Mișcare în jos
+                # Găsește cel mai de sus sprite
+                closest_sprite = min(colliders, key=lambda s: s.rect.top)
+                self.hitbox_rect.bottom = closest_sprite.rect.top
+            elif self.direction.y < 0:  # Mișcare în sus
+                # Găsește cel mai de jos sprite
+                closest_sprite = max(colliders, key=lambda s: s.rect.bottom)
+                self.hitbox_rect.top = closest_sprite.rect.bottom
 
     def destroy(self):
+        self.alive = False
         self.death_time = pygame.time.get_ticks()
         surf = pygame.mask.from_surface(self.frames[0]).to_surface()
         surf.set_colorkey('black')
@@ -131,3 +158,4 @@ class Enemy(pygame.sprite.Sprite):
             self.animate(dt)
         else:
             self.death_timer()
+

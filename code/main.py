@@ -7,15 +7,6 @@ from functions import *
 
 from random import randint,choice
 
-"""
-     ---   CONTROLS ----
-    MOVE 'WASD' OR 'ARROW KEYS'
-    FIRE 'LEFTCLICK'
-    PAUSE 'P'
-    FULLSCREEN 'F'
-
-"""
-
 class Game:
     def __init__(self):
         # setup
@@ -34,6 +25,8 @@ class Game:
         self.last_fullscreen_time = 0
         self.fullscreen_cooldown = 300  # 300 ms cooldown
         
+        # Font
+        self.font = pygame.font.SysFont("Arial", 30)
 
 
         # Grupe
@@ -42,7 +35,9 @@ class Game:
         self.bullet_sprites = pygame.sprite.Group() 
         self.enemy_sprites = pygame.sprite.Group() 
 
-
+        # Progresie
+        self.score = 480
+        self.level = 0
          # arma
         self.can_shoot = True
         self.shoot_time = 0
@@ -50,7 +45,8 @@ class Game:
         self.bullet_distance = 50
         # inamici
         self.enemy_event = pygame.event.custom_type()
-        pygame.time.set_timer(self.enemy_event, 1000) # timer spawn inamici
+        self.Spawn_Interval = 1000
+        pygame.time.set_timer(self.enemy_event, self.Spawn_Interval) # timer spawn inamici
         self.spawn_positions = []
         
         # Audio
@@ -101,13 +97,56 @@ class Game:
 
 
 
+    def increase_score(self, points):
+        """Adaugă puncte la scorul jucătorului."""
+        self.score += points
+        if self.score >= 500 and self.level == 0:    # La 500 de score creste dificultatea sau intra un boss inca ma gandesc ce fac
+            self.level += 1
+            self.Spawn_Interval = 500
+            print(f"Ai ajuns la levelul {self.level} acum intervalul de spawn este: {self.Spawn_Interval} ms")
 
+    def draw_score(self, display_surface):
+        """Desenează scorul pe ecran."""
+        score_text = self.font.render(f"Score: {self.score}", True, (255, 255, 255))
+        display_surface.blit(score_text, (10, 10))  # Poziția scorului pe ecran
 
     def gun_timer(self):
+        """ Activeaza un timeaza un timer pentru urmatorul timp in care playerul poate trage"""
         if not self.can_shoot:
             current_time = pygame.time.get_ticks()
             if current_time - self.shoot_time >= self.gun_cooldown:
                 self.can_shoot = True
+    
+    def game_over(self):
+        """Afișează mesajul de 'Game Over'."""
+        self.bg_music.stop()
+        game_over_text = self.font.render("Game Over", True, (255, 0, 0))
+        self.display_surface.blit(game_over_text, (WINDOW_WIDTH // 2 - 100, WINDOW_HEIGHT // 2 - 50))
+        pygame.display.update()
+        pygame.time.wait(3000) 
+        pygame.quit()
+        exit()
+
+    def draw_health(self, display_surface):
+        """Desenează viața jucătorului pe ecran."""
+        health_text = self.font.render(f"Health: {self.player.health}", True, (255, 0, 0))
+        display_surface.blit(health_text, (10, 40))  # Poziția vieții pe ecran
+
+    def draw_health_bar(self, display_surface):
+        """Desenează o bară vizuală de viață."""
+        bar_width = 200
+        bar_height = 20
+        current_health = (self.player.health / 100) * bar_width
+        pygame.draw.rect(display_surface, (255, 0, 0), (10, 70, bar_width, bar_height))  # Bara completă
+        pygame.draw.rect(display_surface, (0, 255, 0), (10, 70, current_health, bar_height))  # Bara cu viața
+
+    def decrease_health(self, amount):
+        """Scade viața jucătorului."""
+        effective_damage = max(amount - self.player.defense, 1)
+        self.player.health -= effective_damage
+        if self.player.health <= 0:
+            self.game_over()
+
 
     def check_collision(self):
         if self.bullet_sprites:
@@ -116,18 +155,18 @@ class Game:
                 if Collision_sprites:
                     self.impact_sound.play()
                     for sprite in Collision_sprites:
-                        sprite.destroy()
+                        if sprite.alive :
+                            self.increase_score(10)
+                            sprite.destroy()
                     bullet.kill()
 
         enemy_coliding = pygame.sprite.spritecollide(self.player, self.enemy_sprites, False,pygame.sprite.collide_mask)
         if (enemy_coliding):
             if self.player.health>0:
-                self.player.health -= 1
-            print(self.player.health)
+                self.decrease_health(35)
             for sprite in enemy_coliding:
                 sprite.kill()
-        if (self.player.health == 0):
-            self.bg_music.stop()
+    
             
 
     def setup(self):
@@ -176,22 +215,31 @@ class Game:
             else:
                 self.display_surface.fill('black')
                 self.all_sprites.draw(self.player.rect.center)
+
+
+            self.draw_health(self.display_surface)
+            self.draw_health_bar(self.display_surface)
+            self.draw_score(self.display_surface)
             pygame.display.update()
 
         pygame.quit()
 
 if __name__ == '__main__':
+    print("Loading Game...")
     game = Game()
     game.run()
 
 
 """ 
     --- TO DO ---
-  Health Display
-  Make Points System
   More Weapons
   Increasing Difficulty
   Roguelike System
   Bosses and progression
+
+
+
+  pentru a adauga arme noi trebuie sa misc statusurile si tot ce tine de arma din game si sa il pun intr-un fisier separat dupa fac mai multe clase de arme si apoi fac obiecte separate de arme si inca ma 
+  gandesc cum sa fac sa le adaug
 
 """

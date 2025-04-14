@@ -14,9 +14,13 @@ class Player(pygame.sprite.Sprite):
         # movement
         self.direction = pygame.Vector2()
 
+        #Flags
+        self.Dead = False
+
         # Stats
         self.speed = 500
-        self.health = 20
+        self.health = 100
+        self.defense = 20
 
 
 
