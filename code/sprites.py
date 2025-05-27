@@ -1,5 +1,7 @@
 from settings import *
 from math import atan2, degrees
+from random import random,choice
+import os
 
 class Sprite(pygame.sprite.Sprite):
     def __init__(self, pos,surf,groups):
@@ -82,7 +84,12 @@ class Enemy(pygame.sprite.Sprite):
         self.hitbox_rect = self.rect.inflate(-65, -80)
         self.collision_sprites = collision_sprites
         self.direction = pygame.Vector2()
+
+        # Stats
         self.speed= 350
+        self.health = 100
+        self.damage = 35
+        self.score_increase = 10
 
         # Timer
         self.death_time = 0
@@ -159,3 +166,162 @@ class Enemy(pygame.sprite.Sprite):
         else:
             self.death_timer()
 
+class CyclopsBoss(pygame.sprite.Sprite):
+    def __init__(self, pos, player, groups):
+        super().__init__(groups)
+        self.player = player
+        self.load_animations()
+        
+        # Stare inițială
+        self.state = 'idle'
+        self.facing = 'right'
+        self.image = self.animations[self.state][self.facing][0]
+        self.rect = self.image.get_rect(center=pos)
+        self.hitbox_rect = self.rect.inflate(-90, -90)
+        self.health = 1000
+
+        # Stats
+        self.speed = 120
+        self.max_health = 1000
+        self.attack_cooldown = 1500  # ms
+        self.score_increase = 50
+        self.alive = True
+
+
+
+        self.last_attack = pygame.time.get_ticks()
+
+        # Raze
+        self.melee_range = 80
+        self.ranged_range = 250
+
+        # Animații
+        self.anim_index = 0
+        self.anim_timer = 0
+        self.anim_speed = 0.15
+
+    def load_animations(self):
+        self.animations = {
+            state: {'left': [], 'right': []}
+            for state in ['idle', 'run', 'attack_melee', 'throw_rock', 'laser', 'death']
+        }
+        desired_width = 300  # lățimea dorită
+        desired_height = 300  # înălțimea dorită
+
+        for state in self.animations:
+            for dir in ['left', 'right']:
+                path = f'images/enemies/ciclop/{state}/{dir}/'
+                if not os.path.exists(path): continue
+                for file in sorted(os.listdir(path)):
+                    img = pygame.image.load(os.path.join(path, file)).convert_alpha()
+                    
+                    # Redimensionează imaginea
+                    img = pygame.transform.scale(img, (desired_width, desired_height))
+                    
+                    self.animations[state][dir].append(img)
+
+
+    def update(self, dt):
+        if not self.alive:
+            self.animate()  # animăm până termină moartea
+            return
+
+        if self.health > 0:
+            self.move_towards_player(dt)
+            self.handle_ai()
+
+
+        self.animate()
+
+
+    def move_towards_player(self, dt):
+        player_pos = pygame.Vector2(self.player.rect.center)
+        my_pos = pygame.Vector2(self.hitbox_rect.center)
+        direction = player_pos - my_pos
+        distance = direction.length()
+
+        if distance > self.melee_range:
+            self.direction = direction.normalize()
+            self.hitbox_rect.centerx += self.direction.x * self.speed * dt
+            self.hitbox_rect.centery += self.direction.y * self.speed * dt
+            self.rect.center = self.hitbox_rect.center
+            self.change_state('run')
+        else:
+            self.change_state('idle')
+
+        # Schimbă direcția vizuală
+        self.facing = 'right' if direction.x > 0 else 'left'
+        self.distance = distance
+
+    def handle_ai(self):
+        now = pygame.time.get_ticks()
+        if now - self.last_attack >= self.attack_cooldown:
+            if self.distance <= self.melee_range:
+                self.change_state('attack_melee')
+                self.last_attack = now
+            elif self.distance <= self.ranged_range:
+                self.change_state(choice(['throw_rock', 'laser']))
+                self.last_attack = now
+
+    def change_state(self, new_state):
+        if self.state != new_state:
+            self.state = new_state
+            self.anim_index = 0
+            self.anim_timer = 0
+
+    def animate(self):
+        frames = self.animations[self.state][self.facing]
+        if not frames:
+            return
+
+        self.anim_timer += self.anim_speed
+        if self.anim_timer >= 1:
+            self.anim_timer = 0
+            self.anim_index += 1
+
+            if self.anim_index >= len(frames):
+                if self.state in ['attack_melee', 'throw_rock', 'laser']:
+                    self.change_state('idle')
+                elif self.state == 'death':
+                    self.anim_index = len(frames) - 1
+                else:
+                    self.anim_index = 0
+        if self.state == 'death' and self.anim_index >= len(frames) - 1:
+            self.kill()
+
+        self.image = frames[self.anim_index % len(frames)]
+    
+    def draw_health_bar(self, surface, offset):
+        if not self.alive:
+            return
+
+        # Setări dimensiuni
+        bar_height = 10
+        bar_width = self.hitbox_rect.width * 1.5
+        offset_y = -50 
+
+        # Calculează poziția pe ecran ținând cont de camera
+        screen_x = self.hitbox_rect.centerx - bar_width//2 + offset.x
+        screen_y = self.hitbox_rect.top - offset_y + offset.y
+
+        # Desenare componentelor
+        health_ratio = max(0, min(self.health/self.max_health, 1))
+        current_width = int(bar_width * health_ratio)
+        
+        pygame.draw.rect(surface, (255,0,0), (screen_x, screen_y, bar_width, bar_height))
+        pygame.draw.rect(surface, (0,255,0), (screen_x, screen_y, current_width, bar_height))
+        pygame.draw.rect(surface, (0,0,0), (screen_x, screen_y, bar_width, bar_height), 1)
+
+
+
+
+
+    def destroy(self):
+        if not self.alive:
+            return  # Evităm apelul de două ori
+
+        self.alive = False
+        self.change_state('death')
+        self.anim_index = 0
+        self.anim_timer = 0
+        self.death_time = pygame.time.get_ticks()
